@@ -37,6 +37,15 @@ uvicorn main:app --reload --port 8000
 
 Then open `http://localhost:8000`.
 
+## Deploying
+
+`render.yaml` configures a free Render web service — on [render.com](https://render.com),
+**New +** → **Blueprint** → pick this repo, and it reads the file automatically
+(build/start commands, Python environment, all set). No local file storage
+is needed at runtime, so the free tier's lack of a persistent disk isn't a
+concern here. The free tier does spin down after ~15 minutes idle, so the
+first request after a quiet period takes 30-60s to wake back up.
+
 ## Running the tests
 
 ```bash
