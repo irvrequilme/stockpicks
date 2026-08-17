@@ -1,0 +1,2 @@
+# stockpicks
+stock predictor
