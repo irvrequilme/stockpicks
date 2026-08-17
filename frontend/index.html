@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Live technical-analysis stock and crypto signals with a fully backtested, self-disclosed Win Rate — not financial advice." />
+  <meta name="color-scheme" content="dark" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%88%3C/text%3E%3C/svg%3E" />
+  <title>Stockpicks</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      /* Palette: Charcoal / Sage / Mint / Blush / Poppy / Ivory */
+      --charcoal: #373839;
+      --sage: #8DAAA0;
+      --mint: #BCD0CA;
+      --blush: #F2CFC2;
+      --poppy: #F8721B;
+      --ivory: #F2EBE6;
+
+      --bg: var(--charcoal);
+      --surface-1: rgba(242, 235, 230, 0.05); /* ivory, translucent */
+      --surface-2: rgba(242, 235, 230, 0.1);  /* ivory, more present */
+      --border: rgba(242, 235, 230, 0.14);    /* ivory, neutral */
+      --text: var(--ivory);
+      --text-dim: #b7b2ad;
+      --text-faint: #8b8783;
+      --accent: var(--poppy);
+      --accent-hover: #ff8a3d;
+      --green: #9cc4b8;  /* brightened sage/mint — legible as "positive" text on charcoal */
+      --red: #e1503a;    /* brightened rust — legible as "negative" text on charcoal */
+      --yellow: #e0b15a; /* brightened gold, same warm family as poppy — "caution" */
+      --ease: cubic-bezier(0.28, 0.11, 0.32, 1);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+      background: radial-gradient(ellipse 120% 60% at 50% -10%, rgba(242, 207, 194, 0.14) 0%, var(--bg) 55%);
+      color: var(--text);
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 4rem 1.5rem 3rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    h1 {
+      font-size: clamp(2.4rem, 5vw, 3.6rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0 0 0.5rem;
+      background: linear-gradient(180deg, var(--ivory) 0%, #d8d2cc 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .sub { color: var(--text-dim); margin: 0 0 0.6rem; font-size: 1.05rem; max-width: 680px; line-height: 1.5; }
+    .footnote { color: var(--text-faint); font-size: 0.8rem; max-width: 680px; line-height: 1.5; margin: 0.35rem 0; }
+
+    .card {
+      background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 1.25rem 1.5rem;
+      backdrop-filter: blur(20px);
+      margin-top: 1.5rem;
+      transition: border-color 0.3s var(--ease), transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
+    }
+    .card:hover { border-color: rgba(242,235,230,0.22); box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
+
+    button {
+      font: inherit;
+      padding: 0.65rem 1.3rem;
+      border-radius: 980px;
+      border: 1px solid var(--border);
+      background: rgba(242,235,230,0.06);
+      color: var(--text);
+      cursor: pointer;
+      transition: transform 0.2s var(--ease), background 0.2s var(--ease), box-shadow 0.2s var(--ease);
+    }
+    button:hover:not(:disabled) { background: rgba(242,235,230,0.12); transform: translateY(-1px); }
+    button:active:not(:disabled) { transform: translateY(0) scale(0.97); }
+    button:disabled { opacity: 0.5; cursor: default; }
+
+    #refresh {
+      background: var(--accent);
+      border-color: var(--accent);
+      font-weight: 600;
+      position: relative;
+      overflow: hidden;
+    }
+    #refresh:hover:not(:disabled) { background: var(--accent-hover); }
+    #refresh.loading {
+      background: linear-gradient(90deg, var(--accent), #ffb380, var(--accent));
+      background-size: 200% 100%;
+      animation: refresh-sweep 1.4s linear infinite, refresh-pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes refresh-sweep { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
+    @keyframes refresh-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(248,114,27,0.5); } 50% { box-shadow: 0 0 0 8px rgba(248,114,27,0); } }
+
+    #status { color: var(--text-dim); display: flex; align-items: center; justify-content: center; gap: 0.75rem; min-height: 1.4rem; font-size: 0.9rem; }
+
+    .toolbar-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.9rem 0.6rem; }
+
+    .ticker-loader { display: flex; align-items: flex-end; gap: 3px; height: 22px; }
+    .ticker-loader span { display: block; width: 4px; border-radius: 2px; background: var(--accent); animation: ticker-bounce 1.1s ease-in-out infinite; }
+    .ticker-loader span:nth-child(odd) { background: var(--green); }
+    .ticker-loader span:nth-child(even) { background: var(--red); }
+    .ticker-loader span:nth-child(1) { animation-delay: 0s; }
+    .ticker-loader span:nth-child(2) { animation-delay: 0.1s; }
+    .ticker-loader span:nth-child(3) { animation-delay: 0.2s; }
+    .ticker-loader span:nth-child(4) { animation-delay: 0.3s; }
+    .ticker-loader span:nth-child(5) { animation-delay: 0.4s; }
+    .ticker-loader span:nth-child(6) { animation-delay: 0.5s; }
+    .ticker-loader span:nth-child(7) { animation-delay: 0.6s; }
+    @keyframes ticker-bounce { 0%, 100% { height: 6px; opacity: 0.6; } 50% { height: 22px; opacity: 1; } }
+
+    .search-row { display: flex; gap: 0.6rem; }
+    #tickerInput {
+      flex: 1; max-width: 340px; font: inherit; padding: 0.65rem 1rem; border-radius: 980px;
+      border: 1px solid var(--border); background: rgba(242,235,230,0.05); color: var(--text);
+      transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+    }
+    #tickerInput:focus { outline: none; border-color: var(--accent); background: rgba(242,235,230,0.08); }
+    #searchResult {
+      max-height: 0; overflow: hidden; opacity: 0; border-radius: 14px;
+      transition: max-height 0.4s var(--ease), opacity 0.3s var(--ease), padding 0.4s var(--ease), margin 0.4s var(--ease);
+    }
+    #searchResult.open {
+      margin-top: 0.75rem; padding: 1rem 1.2rem; border: 1px solid var(--border);
+      background: rgba(242,235,230,0.03); max-height: 400px; opacity: 1;
+    }
+    #searchResult .search-header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+    #searchResult .search-name { color: var(--text-dim); font-size: 0.85rem; }
+    .search-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 0.8rem; margin-top: 0.9rem; font-size: 0.95rem; }
+    .search-grid div { background: rgba(242,235,230,0.04); border-radius: 10px; padding: 0.5rem 0.6rem; }
+    .search-grid div span:last-child { display: block; color: var(--text-dim); font-size: 0.72rem; margin-top: 0.15rem; }
+    #searchResult.no-signal { color: var(--text-dim); font-style: italic; }
+    .correction-note { font-size: 0.8rem; color: var(--accent); font-style: italic; margin-bottom: 0.6rem; }
+
+    /* Segmented control (sliding pill) tabs */
+    .segmented {
+      position: relative; display: inline-flex; gap: 2px; padding: 3px;
+      background: rgba(242,235,230,0.05); border: 1px solid var(--border); border-radius: 980px;
+    }
+    .segmented-indicator {
+      position: absolute; top: 3px; left: 3px; height: calc(100% - 6px);
+      background: var(--accent); border-radius: 980px;
+      transition: transform 0.35s var(--ease), width 0.35s var(--ease);
+      z-index: 0;
+    }
+    .seg-btn {
+      position: relative; z-index: 1; border: none; background: transparent; color: var(--text-dim);
+      font-size: 0.85rem; font-weight: 600; padding: 0.5rem 1rem; border-radius: 980px;
+      transition: color 0.3s var(--ease);
+    }
+    .seg-btn:hover { background: transparent; transform: none; color: var(--text); }
+    .seg-btn.active { color: #fff; }
+    .seg-btn.main { font-size: 0.95rem; padding: 0.55rem 1.3rem; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; animation: fade-in 0.4s var(--ease); }
+    @keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    .section-sub { color: var(--text-dim); margin: 0.9rem 0 0; font-size: 0.85rem; }
+    .accuracy-note {
+      margin-top: 0.6rem; padding: 0.65rem 0.9rem; border-radius: 10px; font-size: 0.82rem;
+      background: rgba(224,177,90,0.1); border: 1px solid rgba(224,177,90,0.3); color: var(--yellow);
+    }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.88rem; }
+    th, td { text-align: left; padding: 0.7rem 0.7rem; vertical-align: top; border-bottom: 1px solid var(--border); }
+    th { font-weight: 600; color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    tbody tr.data-row { transition: background 0.2s var(--ease); cursor: pointer; }
+    tbody tr.data-row:hover { background: var(--surface-1); }
+    tbody tr.detail-row td { border-bottom: 1px solid var(--border); padding: 0; }
+    tbody tr:last-child td { border-bottom: none; }
+
+    .buy { color: var(--green); font-weight: 600; }
+    .sell { color: var(--red); font-weight: 600; }
+    .risk-Low { color: var(--green); }
+    .risk-Medium { color: var(--yellow); }
+    .risk-High { color: var(--red); }
+    .thesis { max-width: 320px; color: var(--text-faint); }
+    .context { max-width: 260px; color: var(--text-faint); font-size: 0.83rem; }
+    .sentiment-bullish { color: var(--green); }
+    .sentiment-bearish { color: var(--red); }
+    .sentiment-neutral { color: var(--text-dim); }
+    .news-conflict-flag { color: var(--yellow); font-weight: 400; }
+    .news-conflict-note { display: inline-block; margin-top: 0.4rem; color: var(--yellow); font-size: 0.8rem; }
+    .empty { color: var(--text-dim); font-style: italic; padding: 1rem 0; }
+
+    /* Sparklines */
+    .sparkline { display: block; }
+
+    /* Expand chevron + detail row */
+    .expand-chevron { color: var(--text-faint); text-align: center; transition: transform 0.25s var(--ease); display: inline-block; }
+    tr.data-row.expanded .expand-chevron { transform: rotate(180deg); color: var(--accent); }
+    .row-actions { display: flex; align-items: center; gap: 0.6rem; justify-content: flex-end; }
+    .detail-content {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+      max-height: 0; overflow: hidden; padding: 0 0.7rem;
+      transition: max-height 0.35s var(--ease), padding 0.35s var(--ease);
+    }
+    tr.detail-row.expanded .detail-content { max-height: 200px; padding: 0.9rem 0.7rem 1.1rem; }
+    .detail-content .detail-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); margin-bottom: 0.3rem; }
+
+    /* Flash on value change */
+    @keyframes flash-up-anim { 0% { background: rgba(156,196,184,0.35); } 100% { background: transparent; } }
+    @keyframes flash-down-anim { 0% { background: rgba(225,80,58,0.35); } 100% { background: transparent; } }
+    .flash-up { animation: flash-up-anim 1.5s ease-out; }
+    .flash-down { animation: flash-down-anim 1.5s ease-out; }
+
+    /* Click-to-copy price cells */
+    .copyable { cursor: pointer; border-radius: 6px; position: relative; transition: background 0.15s var(--ease), color 0.15s var(--ease); }
+    .copyable:hover { background: rgba(248,114,27,0.12); color: var(--accent); }
+    .copyable.copy-flash { background: rgba(156,196,184,0.35); color: var(--green); }
+    .copyable.copy-flash::after {
+      content: "✓ Copied"; position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%);
+      margin-bottom: 4px; padding: 0.15rem 0.5rem; border-radius: 6px; white-space: nowrap;
+      background: var(--green); color: var(--charcoal); font-size: 0.7rem; font-weight: 700; z-index: 5;
+      animation: copy-pop 0.7s var(--ease);
+    }
+    @keyframes copy-pop { 0% { opacity: 0; transform: translateX(-50%) translateY(3px); } 15% { opacity: 1; transform: translateX(-50%) translateY(0); } 80% { opacity: 1; } 100% { opacity: 0; } }
+    .search-grid .copyable { cursor: pointer; }
+    .search-grid .copyable:hover { background: rgba(248,114,27,0.12); }
+
+    /* Skeleton loading rows */
+    .skeleton-bar {
+      height: 0.9rem; border-radius: 5px; width: 80%;
+      background: linear-gradient(90deg, var(--surface-1) 25%, var(--surface-2) 50%, var(--surface-1) 75%);
+      background-size: 200% 100%;
+      animation: skeleton-shimmer 1.4s ease-in-out infinite;
+    }
+    @keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    footer { margin-top: 3rem; font-size: 0.8rem; color: var(--text-faint); line-height: 1.6; }
+    footer p { margin: 0.9rem 0; }
+    footer strong { color: var(--text-dim); }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="reveal" style="text-align: center;">
+    <h1>Stockpicks</h1>
+  </div>
+
+  <div class="reveal" style="text-align: center; margin-top: 0.25rem;">
+    <div class="segmented" id="mainTabs">
+      <div class="segmented-indicator"></div>
+      <button class="seg-btn main active" data-main-tab="stocks">Stocks</button>
+      <button class="seg-btn main" data-main-tab="crypto">Crypto</button>
+    </div>
+  </div>
+
+  <div class="reveal toolbar-row" style="margin-top: 1.75rem;">
+    <button id="refresh">Refresh</button>
+    <div class="search-row">
+      <input id="tickerInput" type="text" placeholder="Search a ticker, e.g. AAPL or BTC-USD" />
+      <button id="searchBtn">Search</button>
+    </div>
+  </div>
+  <div id="searchResult" style="text-align: left; max-width: 500px; margin: 0 auto;"></div>
+
+  <div class="reveal" style="margin-top: 2rem;">
+    <div id="stocks-panel" class="tab-panel active">
+      <div style="text-align: center;">
+      <div class="segmented" id="stocksSubTabs">
+        <div class="segmented-indicator"></div>
+        <button class="seg-btn active" data-sub-tab="stocks-dayTrade">Day Trade</button>
+        <button class="seg-btn" data-sub-tab="stocks-oneWeek">1 Week</button>
+        <button class="seg-btn" data-sub-tab="stocks-swingTrade">Swing Trade</button>
+        <button class="seg-btn" data-sub-tab="stocks-oneHour">1 Hour</button>
+      </div>
+      </div>
+
+      <div id="stocks-dayTrade-panel" class="tab-panel active">
+        <div id="stocksDayTradeEmpty" class="empty" style="display:none">No day-trade candidates right now.</div>
+        <div style="overflow-x:auto;">
+        <table id="stocksDayTradeTable" style="display:none">
+          <thead><tr><th>Ticker</th><th>Trend</th><th>Signal</th><th>Win Rate*</th><th>Entry</th><th>Target</th><th>Stop</th><th>Est. Time</th><th>Risk</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        </div>
+      </div>
+
+      <div id="stocks-oneWeek-panel" class="tab-panel">
+        <div id="stocksOneWeekEmpty" class="empty" style="display:none">No 1-week candidates right now.</div>
+        <div style="overflow-x:auto;">
+        <table id="stocksOneWeekTable" style="display:none">
+          <thead><tr><th>Ticker</th><th>Trend</th><th>Signal</th><th>Win Rate*</th><th>Entry</th><th>Target</th><th>Stop</th><th>Est. Time</th><th>Risk</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        </div>
+      </div>
+
+      <div id="stocks-swingTrade-panel" class="tab-panel">
+        <div id="stocksSwingTradeEmpty" class="empty" style="display:none">No swing-trade candidates right now.</div>
+        <div style="overflow-x:auto;">
+        <table id="stocksSwingTradeTable" style="display:none">
+          <thead><tr><th>Ticker</th><th>Trend</th><th>Signal</th><th>Win Rate*</th><th>Entry</th><th>Target</th><th>Stop</th><th>Est. Time</th><th>Risk</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        </div>
+      </div>
+
+      <div id="stocks-oneHour-panel" class="tab-panel">
+        <p class="accuracy-note">⚠ Weakest of the four horizons: a 26.3% overall win rate and a 40% timeout rate in backtesting (vs. ~29-31% win rate for the other three). Targets are sized from actual 5-minute price movement (ATR), not a daily-scale assumption — an earlier version reused the daily formula and performed far worse (85% timeout, 18.8% win rate). Backtested on ~60 days of 5-minute candles (Yahoo's intraday history limit), a much smaller sample than the 2-year daily backtest behind the other three.</p>
+        <div id="stocksOneHourLoading" class="empty" style="display:none">Loading 1-hour analysis (5-minute candles)...</div>
+        <div id="stocksOneHourEmpty" class="empty" style="display:none">No 1-hour candidates right now.</div>
+        <div style="overflow-x:auto;">
+        <table id="stocksOneHourTable" style="display:none">
+          <thead><tr><th>Ticker</th><th>Trend</th><th>Signal</th><th>Win Rate*</th><th>Entry</th><th>Target</th><th>Stop</th><th>Est. Time</th><th>Risk</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="crypto-panel" class="tab-panel">
+      <div style="text-align: center;">
+      <div class="segmented" id="cryptoSubTabs">
+        <div class="segmented-indicator"></div>
+        <button class="seg-btn active" data-sub-tab="crypto-dayTrade">Day Trade</button>
+        <button class="seg-btn" data-sub-tab="crypto-oneWeek">1 Week</button>
+        <button class="seg-btn" data-sub-tab="crypto-swingTrade">Swing Trade</button>
+        <button class="seg-btn" data-sub-tab="crypto-oneHour">1 Hour</button>
+      </div>
+      </div>
+
+      <div id="crypto-dayTrade-panel" class="tab-panel active">
+        <div id="cryptoDayTradeEmpty" class="empty" style="display:none">No day-trade candidates right now.</div>
+        <div style="overflow-x:auto;">
+        <table id="cryptoDayTradeTable" style="display:none">
+          <thead><tr><th>Ticker</th><th>Trend</th><th>Signal</th><th>Win Rate*</th><th>Entry</th><th>Target</th><th>Stop</th><th>Est. Time</th><th>Risk</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        </div>
+      </div>
+
+      <div id="crypto-oneWeek-panel" class="tab-panel">
+        <div id="cryptoOneWeekEmpty" class="empty" style="display:none">No 1-week candidates right now.</div>
+        <div style="overflow-x:auto;">
+        <table id="cryptoOneWeekTable" style="display:none">
+          <thead><tr><th>Ticker</th><th>Trend</th><th>Signal</th><th>Win Rate*</th><th>Entry</th><th>Target</th><th>Stop</th><th>Est. Time</th><th>Risk</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        </div>
+      </div>
+
+      <div id="crypto-swingTrade-panel" class="tab-panel">
+        <div id="cryptoSwingTradeEmpty" class="empty" style="display:none">No swing-trade candidates right now.</div>
+        <div style="overflow-x:auto;">
+        <table id="cryptoSwingTradeTable" style="display:none">
+          <thead><tr><th>Ticker</th><th>Trend</th><th>Signal</th><th>Win Rate*</th><th>Entry</th><th>Target</th><th>Stop</th><th>Est. Time</th><th>Risk</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        </div>
+      </div>
+
+      <div id="crypto-oneHour-panel" class="tab-panel">
+        <p class="accuracy-note">⚠ Weakest of the four horizons: a 26.3% overall win rate and a 40% timeout rate in backtesting (vs. ~29-31% win rate for the other three). Targets are sized from actual 5-minute price movement (ATR), not a daily-scale assumption — an earlier version reused the daily formula and performed far worse (85% timeout, 18.8% win rate). Backtested on ~60 days of 5-minute candles (Yahoo's intraday history limit), a much smaller sample than the 2-year daily backtest behind the other three.</p>
+        <div id="cryptoOneHourLoading" class="empty" style="display:none">Loading 1-hour analysis (5-minute candles)...</div>
+        <div id="cryptoOneHourEmpty" class="empty" style="display:none">No 1-hour candidates right now.</div>
+        <div style="overflow-x:auto;">
+        <table id="cryptoOneHourTable" style="display:none">
+          <thead><tr><th>Ticker</th><th>Trend</th><th>Signal</th><th>Win Rate*</th><th>Entry</th><th>Target</th><th>Stop</th><th>Est. Time</th><th>Risk</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="status" class="reveal" style="text-align: center; margin-top: 1.5rem;"></div>
+
+  <footer class="reveal">
+    <p>Not financial advice — for informational purposes only. Do your own research before trading.</p>
+  </footer>
+
+  <script>
+    // FastAPI error responses carry a helpful {"detail": "..."} body — surface
+    // that to the user instead of a bare "HTTP 503" when a request fails.
+    async function extractErrorDetail(res) {
+      try {
+        const body = await res.json();
+        if (body && body.detail) return body.detail;
+      } catch (err) {
+        // response wasn't JSON — fall through to the generic message
+      }
+      return "HTTP " + res.status;
+    }
+
+    // Company names, headlines, etc. come from Yahoo Finance, not from this
+    // app's own code — escape before interpolating into innerHTML so a stray
+    // "<"/">"/"&" in upstream data can't break markup or inject anything.
+    function escapeHtml(value) {
+      if (value == null) return "";
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    const statusEl = document.getElementById("status");
+    const btn = document.getElementById("refresh");
+    const currentInterval = "1d";
+
+    // --- Sliding segmented-control indicator ---
+    function initSegmented(containerId) {
+      const container = document.getElementById(containerId);
+      const indicator = container.querySelector(".segmented-indicator");
+      const buttons = Array.from(container.querySelectorAll(".seg-btn"));
+
+      function move(btnEl) {
+        indicator.style.width = btnEl.offsetWidth + "px";
+        indicator.style.transform = `translateX(${btnEl.offsetLeft}px)`;
+      }
+
+      const active = container.querySelector(".seg-btn.active") || buttons[0];
+      requestAnimationFrame(() => move(active));
+      buttons.forEach((b) => b.addEventListener("click", () => move(b)));
+      window.addEventListener("resize", () => {
+        const cur = container.querySelector(".seg-btn.active");
+        if (cur) move(cur);
+      });
+      return { move };
+    }
+
+    initSegmented("mainTabs");
+    initSegmented("stocksSubTabs");
+    initSegmented("cryptoSubTabs");
+
+    // --- Scroll-reveal ---
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("visible");
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1 });
+    document.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el));
+
+    document.querySelectorAll("[data-main-tab]").forEach((tabBtn) => {
+      tabBtn.addEventListener("click", () => {
+        document.querySelectorAll("[data-main-tab]").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll("#stocks-panel, #crypto-panel").forEach((p) => p.classList.remove("active"));
+
+        tabBtn.classList.add("active");
+        document.getElementById(tabBtn.dataset.mainTab + "-panel").classList.add("active");
+      });
+    });
+
+    document.querySelectorAll("[data-sub-tab]").forEach((tabBtn) => {
+      tabBtn.addEventListener("click", () => {
+        const group = tabBtn.closest(".tab-panel").querySelectorAll("[data-sub-tab]");
+        group.forEach((b) => b.classList.remove("active"));
+        const parentPanel = tabBtn.closest(".tab-panel");
+        parentPanel.querySelectorAll(":scope > .tab-panel").forEach((p) => p.classList.remove("active"));
+
+        tabBtn.classList.add("active");
+        document.getElementById(tabBtn.dataset.subTab + "-panel").classList.add("active");
+
+        if (tabBtn.dataset.subTab === "stocks-oneHour" && !oneHourLoaded.has("stocks")) loadOneHourPicks("stocks");
+        if (tabBtn.dataset.subTab === "crypto-oneHour" && !oneHourLoaded.has("crypto")) loadOneHourPicks("crypto");
+      });
+    });
+
+    // Mirrors backend/picks.py's HORIZON_BARS/CATEGORY_LABELS/estimate_duration —
+    // lets the search card offer alternate daily-scale horizons without a
+    // round trip, since entry/target/stop are sized from the ticker's current
+    // volatility and don't actually depend on which horizon is displayed
+    // (see picks.py evaluate()). one_hour is a distinct 5-minute-candle
+    // category — see DAILY_HORIZON_OPTIONS below.
+    const HORIZON_BARS = { day_trade: 2, one_week: 5, swing_trade: 15, one_hour: 12 };
+    const DAILY_HORIZON_OPTIONS = [
+      { value: "day_trade", label: "Day Trade" },
+      { value: "one_week", label: "1 Week" },
+      { value: "swing_trade", label: "Swing Trade" },
+    ];
+    const HORIZON_OPTIONS = [...DAILY_HORIZON_OPTIONS, { value: "one_hour", label: "1 Hour" }];
+    const INTERVAL_MINUTES = { "1m": 1, "5m": 5, "30m": 30 };
+
+    function estimateDuration(category, interval) {
+      const bars = HORIZON_BARS[category];
+      if (interval === "1d") {
+        if (bars < 5) return `~${bars} trading days`;
+        const weeks = Math.round((bars / 5) * 10) / 10;
+        return `~${bars} trading days (~${weeks} wk)`;
+      }
+      const minutes = bars * INTERVAL_MINUTES[interval];
+      if (minutes < 60) return `~${minutes} min`;
+      const hours = Math.round((minutes / 60) * 10) / 10;
+      return `~${hours} hr`;
+    }
+
+    function renderContext(p) {
+      const parts = [];
+      if (p.fundamentals && p.fundamentals.analyst_rating) {
+        const f = p.fundamentals;
+        const upside = f.upside_pct != null ? ` (target ${f.upside_pct > 0 ? "+" : ""}${f.upside_pct}%)` : "";
+        parts.push(`Analyst: ${f.analyst_rating.replace("_", " ")}${upside}`);
+      }
+      if (p.news_sentiment) {
+        const n = p.news_sentiment;
+        parts.push(`News: <span class="sentiment-${n.label}">${n.label}</span> (${n.headline_count} headlines)`);
+      }
+      if (p.news_conflict) {
+        parts.push(`<span class="news-conflict-note">⚠ Live news sentiment disagrees with this signal — the score/Win Rate above don't factor in news, weigh this yourself.</span>`);
+      }
+      if (parts.length === 0) return '<span style="color:var(--text-faint)">no data</span>';
+      return parts.join("<br>");
+    }
+
+    function copyToClipboard(value, el) {
+      const text = String(value);
+      // navigator.clipboard only exists in "secure contexts" (HTTPS or
+      // localhost) — e.g. missing entirely if this is opened via a plain-HTTP
+      // LAN IP from another device. Fail with a visible message instead of
+      // throwing an uncaught TypeError on the line below.
+      if (!navigator.clipboard) {
+        statusEl.textContent = "Copy isn't available here — clipboard access requires HTTPS or localhost.";
+        return;
+      }
+      navigator.clipboard.writeText(text).then(() => {
+        if (!el) return;
+        // Class-only feedback (no textContent swap) — some copy targets
+        // (the search card's Entry/Target/Stop cells) contain a nested
+        // <span> label, and swapping textContent would flatten and lose it.
+        el.classList.add("copy-flash");
+        setTimeout(() => el.classList.remove("copy-flash"), 700);
+      }).catch(() => {
+        statusEl.textContent = "Copy failed — clipboard access was blocked by the browser.";
+      });
+    }
+
+    function renderSparkline(values) {
+      if (!values || values.length < 2) return "";
+      const w = 64, h = 26;
+      const min = Math.min(...values), max = Math.max(...values);
+      const range = max - min || 1;
+      const pts = values.map((v, i) => {
+        const x = (i / (values.length - 1)) * w;
+        const y = h - 2 - ((v - min) / range) * (h - 4);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(" ");
+      const up = values[values.length - 1] >= values[0];
+      const color = up ? "var(--green)" : "var(--red)";
+      return `<svg class="sparkline" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }
+
+    function renderSkeletonRows(tableId) {
+      const table = document.getElementById(tableId);
+      const tbody = table.querySelector("tbody");
+      tbody.innerHTML = "";
+      const cols = table.querySelectorAll("thead th").length;
+      for (let i = 0; i < 4; i++) {
+        const tr = document.createElement("tr");
+        tr.className = "data-row";
+        tr.style.cursor = "default";
+        tr.innerHTML = Array.from({ length: cols }, () => `<td><div class="skeleton-bar"></div></td>`).join("");
+        tbody.appendChild(tr);
+      }
+      table.style.display = "";
+    }
+
+    const previousPickData = {};
+
+    function flashIfChanged(td, key, newVal) {
+      const prev = previousPickData[key];
+      if (prev !== undefined && prev !== newVal && td) {
+        td.classList.add(newVal > prev ? "flash-up" : "flash-down");
+        setTimeout(() => td.classList.remove("flash-up", "flash-down"), 1500);
+      }
+      previousPickData[key] = newVal;
+    }
+
+    function renderSection(picks, tableId, emptyId) {
+      const table = document.getElementById(tableId);
+      const empty = document.getElementById(emptyId);
+      const tbody = table.querySelector("tbody");
+      tbody.innerHTML = "";
+
+      if (!picks || picks.length === 0) {
+        table.style.display = "none";
+        empty.style.display = "";
+        return;
+      }
+
+      for (const p of picks) {
+        const tr = document.createElement("tr");
+        tr.className = "data-row";
+        const arrow = p.signal === "BUY" ? "▲" : "▼";
+        tr.innerHTML = `
+          <td><strong>${escapeHtml(p.ticker)}</strong><br><span style="color:var(--text-dim)">${escapeHtml(p.name)}</span></td>
+          <td>${renderSparkline(p.sparkline)}</td>
+          <td class="${p.signal === 'BUY' ? 'buy' : 'sell'}">${arrow} ${p.signal}${p.news_conflict ? ' <span class="news-conflict-flag" title="Live news sentiment disagrees with this signal">⚠</span>' : ''}</td>
+          <td data-cell="confidence">${p.confidence}%</td>
+          <td data-cell="entry" class="copyable" title="Click to copy">$${p.entry}</td>
+          <td class="copyable" title="Click to copy">$${p.target}</td>
+          <td class="copyable" title="Click to copy">$${p.stop}</td>
+          <td>${p.estimated_duration}</td>
+          <td class="risk-${p.risk}">${p.risk}</td>
+          <td class="row-actions">
+            <span class="expand-chevron">▾</span>
+          </td>
+        `;
+
+        const detailTr = document.createElement("tr");
+        detailTr.className = "detail-row";
+        detailTr.innerHTML = `<td colspan="10"><div class="detail-content">
+          <div><div class="detail-label">Thesis</div><div class="thesis">${p.thesis}</div></div>
+          <div><div class="detail-label">Context**</div><div class="context">${renderContext(p)}</div></div>
+        </div></td>`;
+
+        tr.addEventListener("click", () => {
+          tr.classList.toggle("expanded");
+          detailTr.classList.toggle("expanded");
+        });
+
+        const [entryTd, targetTd, stopTd] = tr.querySelectorAll(".copyable");
+        entryTd.addEventListener("click", (e) => { e.stopPropagation(); copyToClipboard(p.entry, entryTd); });
+        targetTd.addEventListener("click", (e) => { e.stopPropagation(); copyToClipboard(p.target, targetTd); });
+        stopTd.addEventListener("click", (e) => { e.stopPropagation(); copyToClipboard(p.stop, stopTd); });
+
+        tbody.appendChild(tr);
+        tbody.appendChild(detailTr);
+
+        const key = `${tableId}:${p.ticker}`;
+        flashIfChanged(tr.querySelector('[data-cell="confidence"]'), `${key}:confidence`, p.confidence);
+        flashIfChanged(entryTd, `${key}:entry`, p.entry);
+      }
+      table.style.display = "";
+      empty.style.display = "none";
+    }
+
+    const LOADING_MESSAGES = [
+      "Scanning market for top picks...",
+      "Crunching RSI, MACD, EMA...",
+      "Hunting for chart patterns...",
+      "Checking analyst sentiment...",
+      "Reading the tea leaves (this can take up to a minute)...",
+    ];
+
+    function startLoadingAnimation() {
+      const bars = Array.from({ length: 7 }, () => "<span></span>").join("");
+      statusEl.innerHTML = `<span class="ticker-loader">${bars}</span><span id="loadingMsg">${LOADING_MESSAGES[0]}</span>`;
+      const msgEl = document.getElementById("loadingMsg");
+      let i = 0;
+      return setInterval(() => {
+        i = (i + 1) % LOADING_MESSAGES.length;
+        if (msgEl) msgEl.textContent = LOADING_MESSAGES[i];
+      }, 1600);
+    }
+
+    const ALL_TABLE_IDS = [
+      "stocksDayTradeTable", "stocksOneWeekTable", "stocksSwingTradeTable",
+      "cryptoDayTradeTable", "cryptoOneWeekTable", "cryptoSwingTradeTable",
+    ];
+
+    // 1 Hour scans 5-minute candles across the whole universe — a separate,
+    // slower Yahoo Finance round trip from the daily scan above, so it's
+    // fetched lazily (only when that sub-tab is actually opened) rather than
+    // on every Refresh. Cleared on Refresh so reopening it afterward re-fetches.
+    const oneHourLoaded = new Set(); // "stocks" | "crypto"
+
+    async function loadOneHourPicks(section) {
+      const endpoint = section === "crypto" ? "/api/picks/crypto" : "/api/picks";
+      const prefix = section === "crypto" ? "crypto" : "stocks";
+      const loadingEl = document.getElementById(`${prefix}OneHourLoading`);
+      const emptyEl = document.getElementById(`${prefix}OneHourEmpty`);
+      const table = document.getElementById(`${prefix}OneHourTable`);
+
+      table.style.display = "none";
+      emptyEl.style.display = "none";
+      loadingEl.style.display = "";
+
+      try {
+        const res = await fetch(`${endpoint}?top=10&interval=5m`);
+        if (!res.ok) throw new Error(await extractErrorDetail(res));
+        const data = await res.json();
+        renderSection(data.one_hour, `${prefix}OneHourTable`, `${prefix}OneHourEmpty`);
+        oneHourLoaded.add(section);
+      } catch (err) {
+        emptyEl.textContent = "Failed to load 1-hour picks: " + err;
+        emptyEl.style.display = "";
+      } finally {
+        loadingEl.style.display = "none";
+      }
+    }
+
+    async function loadPicks() {
+      oneHourLoaded.clear();
+      btn.disabled = true;
+      btn.classList.add("loading");
+      const loadingTimer = startLoadingAnimation();
+      ALL_TABLE_IDS.forEach((id) => {
+        document.getElementById(id.replace("Table", "Empty")).style.display = "none";
+        renderSkeletonRows(id);
+      });
+
+      try {
+        const [stocksRes, cryptoRes] = await Promise.all([
+          fetch(`/api/picks?top=10&interval=${currentInterval}`),
+          fetch(`/api/picks/crypto?top=10&interval=${currentInterval}`),
+        ]);
+        if (!stocksRes.ok) throw new Error(await extractErrorDetail(stocksRes));
+        if (!cryptoRes.ok) throw new Error(await extractErrorDetail(cryptoRes));
+        const stocks = await stocksRes.json();
+        const crypto = await cryptoRes.json();
+
+        renderSection(stocks.day_trade, "stocksDayTradeTable", "stocksDayTradeEmpty");
+        renderSection(stocks.one_week, "stocksOneWeekTable", "stocksOneWeekEmpty");
+        renderSection(stocks.swing_trade, "stocksSwingTradeTable", "stocksSwingTradeEmpty");
+        renderSection(crypto.day_trade, "cryptoDayTradeTable", "cryptoDayTradeEmpty");
+        renderSection(crypto.one_week, "cryptoOneWeekTable", "cryptoOneWeekEmpty");
+        renderSection(crypto.swing_trade, "cryptoSwingTradeTable", "cryptoSwingTradeEmpty");
+
+        const total = (stocks.day_trade?.length || 0) + (stocks.one_week?.length || 0) + (stocks.swing_trade?.length || 0)
+          + (crypto.day_trade?.length || 0) + (crypto.one_week?.length || 0) + (crypto.swing_trade?.length || 0);
+        clearInterval(loadingTimer);
+        statusEl.textContent = `Updated ${new Date().toLocaleTimeString()} — ${total} picks.`;
+      } catch (err) {
+        clearInterval(loadingTimer);
+        statusEl.textContent = "Failed to load picks: " + err;
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove("loading");
+      }
+    }
+
+    const tickerInput = document.getElementById("tickerInput");
+    const searchBtn = document.getElementById("searchBtn");
+    const searchResult = document.getElementById("searchResult");
+
+    // one_hour is a genuinely separate analysis (5-minute candles, fetched
+    // on demand) rather than a rescaled view of the daily signal — it can
+    // have its own signal/thesis/risk, not just its own target/stop. These
+    // helpers build a display payload for whichever horizon is active,
+    // sourcing from the shared daily result for the three daily categories
+    // and from the lazily-fetched intraday result for one_hour.
+    function dailyPayload(dailyData, category) {
+      const v = dailyData.horizons[category];
+      return {
+        ticker: dailyData.ticker, name: dailyData.name, signal: dailyData.signal,
+        thesis: dailyData.thesis, risk: dailyData.risk, category,
+        entry: v.entry, target: v.target, stop: v.stop, confidence: v.confidence,
+        estimated_duration: estimateDuration(category, currentInterval),
+      };
+    }
+
+    async function runSearch() {
+      const ticker = tickerInput.value.trim();
+      if (!ticker) return;
+
+      searchBtn.disabled = true;
+      searchResult.className = "open";
+      searchResult.innerHTML = `Looking up ${escapeHtml(ticker)}...`;
+
+      try {
+        const res = await fetch(`/api/search?ticker=${encodeURIComponent(ticker)}&interval=${currentInterval}`);
+        if (!res.ok) throw new Error(await extractErrorDetail(res));
+        const dailyData = await res.json();
+
+        if (dailyData.error) {
+          searchResult.className = "open no-signal";
+          searchResult.innerHTML = dailyData.error;
+          return;
+        }
+
+        const correctionNote = dailyData.corrected_from
+          ? `<div class="correction-note">Showing "${dailyData.ticker}" — no exact match for "${dailyData.corrected_from}"</div>`
+          : "";
+
+        if (!dailyData.signal) {
+          searchResult.className = "open no-signal";
+          searchResult.innerHTML = `
+            ${correctionNote}
+            <div class="search-header"><strong>${escapeHtml(dailyData.ticker)}</strong><span class="search-name">${escapeHtml(dailyData.name)}</span></div>
+            <div>Price: $${dailyData.price} — ${dailyData.thesis}</div>
+          `;
+          return;
+        }
+
+        let hourlyData = null; // fetched lazily the first time the "1 Hour" tab is clicked
+        let activeCategory = dailyData.category;
+
+        searchResult.className = "open";
+        searchResult.innerHTML = `
+          ${correctionNote}
+          <div class="search-header">
+            <div><strong>${dailyData.ticker}</strong> <span data-cell="signal-badge"></span></div>
+            <span class="search-name">${escapeHtml(dailyData.name)}</span>
+          </div>
+          <div class="detail-label" style="margin-top:0.9rem;">Time horizon</div>
+          <div class="segmented" id="searchHorizon" style="margin-top:0.3rem;">
+            <div class="segmented-indicator"></div>
+            ${HORIZON_OPTIONS.map((h) => `<button class="seg-btn${h.value === activeCategory ? ' active' : ''}" data-horizon="${h.value}">${h.label}</button>`).join("")}
+          </div>
+          <div data-cell="body"></div>
+        `;
+
+        function renderBody(payload) {
+          const signalBadge = searchResult.querySelector('[data-cell="signal-badge"]');
+          signalBadge.className = payload.signal === "BUY" ? "buy" : "sell";
+          signalBadge.textContent = payload.signal;
+
+          const hourlyCaveat = payload.category === "one_hour"
+            ? `<div class="news-conflict-note">⚠ Weakest of the four horizons: a 26.3% overall win rate and a 40% timeout rate in backtesting (vs. ~29-31% win rate the other three see). Targets are sized from actual 5-minute price movement (ATR), not a daily-scale assumption. Backtested on ~60 days of 5-minute candles (Yahoo's intraday history limit), a much smaller sample than the 2-year daily backtest behind the other three.</div>`
+            : "";
+          searchResult.querySelector('[data-cell="body"]').innerHTML = `
+            <div class="search-grid" style="margin-top:0.9rem;">
+              <div class="copyable" data-copy-field="entry" title="Click to copy">$<span data-cell="entry-val">${payload.entry}</span><span>Entry</span></div>
+              <div class="copyable" data-copy-field="target" title="Click to copy">$<span data-cell="target-val">${payload.target}</span><span>Target</span></div>
+              <div class="copyable" data-copy-field="stop" title="Click to copy">$<span data-cell="stop-val">${payload.stop}</span><span>Stop</span></div>
+              <div><span data-cell="confidence-val">${payload.confidence}</span>%<span>Win Rate*</span></div>
+              <div>${payload.risk}<span>Risk</span></div>
+              <div data-cell="est-time">${payload.estimated_duration}<span>Est. Time</span></div>
+            </div>
+            ${hourlyCaveat}
+            <div class="search-thesis">${payload.thesis}</div>
+          `;
+          searchResult.querySelectorAll(".copyable").forEach((el) => {
+            el.addEventListener("click", () => copyToClipboard(payload[el.dataset.copyField], el));
+          });
+        }
+
+        renderBody(dailyPayload(dailyData, activeCategory));
+
+        initSegmented("searchHorizon");
+        document.querySelectorAll("#searchHorizon .seg-btn").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const category = btn.dataset.horizon;
+            if (category === activeCategory) return;
+            activeCategory = category;
+
+            if (category !== "one_hour") {
+              renderBody(dailyPayload(dailyData, category));
+              return;
+            }
+
+            if (hourlyData) {
+              renderBody(hourlyData);
+              return;
+            }
+
+            searchResult.querySelector('[data-cell="body"]').innerHTML = `<div style="margin-top:0.9rem; color:var(--text-dim);">Loading 1-hour analysis (5-minute candles)...</div>`;
+            try {
+              const res = await fetch(`/api/search?ticker=${encodeURIComponent(dailyData.ticker)}&interval=5m`);
+              if (!res.ok) throw new Error(await extractErrorDetail(res));
+              const intraday = await res.json();
+              if (intraday.error || !intraday.signal) {
+                searchResult.querySelector('[data-cell="body"]').innerHTML = `<div style="margin-top:0.9rem; color:var(--text-dim); font-style:italic;">No 1-hour signal right now — 5-minute RSI/MACD/EMA/pattern don't agree on a direction.</div>`;
+                return;
+              }
+              hourlyData = {
+                ticker: intraday.ticker, name: intraday.name, signal: intraday.signal,
+                thesis: intraday.thesis, risk: intraday.risk, category: "one_hour",
+                entry: intraday.entry, target: intraday.target, stop: intraday.stop,
+                confidence: intraday.confidence, estimated_duration: intraday.estimated_duration,
+              };
+              renderBody(hourlyData);
+            } catch (err) {
+              searchResult.querySelector('[data-cell="body"]').innerHTML = `<div style="margin-top:0.9rem; color:var(--red);">1-hour lookup failed: ${escapeHtml(String(err))}</div>`;
+            }
+          });
+        });
+      } catch (err) {
+        searchResult.className = "open no-signal";
+        searchResult.innerHTML = "Search failed: " + err;
+      } finally {
+        searchBtn.disabled = false;
+      }
+    }
+
+    searchBtn.addEventListener("click", runSearch);
+    tickerInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") runSearch();
+    });
+    tickerInput.addEventListener("input", () => {
+      if (!tickerInput.value.trim()) {
+        searchResult.className = "";
+        searchResult.innerHTML = "";
+      }
+    });
+
+    btn.addEventListener("click", loadPicks);
+    loadPicks();
+  </script>
+</body>
+</html>
